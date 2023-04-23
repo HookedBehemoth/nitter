@@ -20,7 +20,7 @@ requires "packedjson#9e6fbb6"
 requires "supersnappy#6c94198"
 requires "redpool#8b7c1db"
 requires "https://github.com/zedeus/redis#d0a0e6f"
-requires "zippy#123cd59"
+requires "zippy#3b863db"
 requires "flatty#9f885d7"
 requires "jsony#d0e69bd"
 
