@@ -33,7 +33,7 @@ proc parseGraphUser(js: JsonNode): User =
   result = parseUser(user{"legacy"})
 
   if "is_blue_verified" in user:
-    result.verified = true
+    result.verified = user{"is_blue_verified"}.getBool()
 
 proc parseGraphList*(js: JsonNode): List =
   if js.isNull: return
@@ -557,6 +557,10 @@ proc parseGraphTimeline*(js: JsonNode; root: string; after=""): Timeline =
             let tweet = parseGraphTweet(tweetResult)
             if not tweet.available:
               tweet.id = parseBiggestInt(entryId.getId())
+            result.content.add tweet
+        elif entryId.startsWith("profile-conversation") or entryId.startsWith("homeConversation"):
+          let (thread, self) = parseGraphThread(e)
+          for tweet in thread.content:
             result.content.add tweet
         elif entryId.startsWith("cursor-bottom"):
           result.bottom = e{"content", "value"}.getStr
