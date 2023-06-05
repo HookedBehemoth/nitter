@@ -7,19 +7,31 @@ genPrefsType()
 type
   RateLimitError* = object of CatchableError
   InternalError* = object of CatchableError
+  BadClientError* = object of CatchableError
+
+  TimelineKind* {.pure.} = enum
+    tweets
+    replies
+    media
 
   Api* {.pure.} = enum
     tweetDetail
-    userShow
+    tweetResult
     timeline
     search
-    tweet
+    userSearch
     list
     listBySlug
     listMembers
+    listTweets
     userRestId
     userScreenName
-    status
+    favorites
+    userTweets
+    userTweetsAndReplies
+    userMedia
+    favoriters
+    retweeters
 
   RateLimit* = object
     remaining*: int
@@ -36,9 +48,11 @@ type
     null = 0
     noUserMatches = 17
     protectedUser = 22
+    missingParams = 25
     couldntAuth = 32
     doesntExist = 34
     invalidPermission = 37
+    invalidParam = 47
     userNotFound = 50
     suspended = 63
     rateLimited = 88
@@ -96,7 +110,7 @@ type
     variants*: seq[VideoVariant]
 
   QueryKind* = enum
-    posts, replies, media, users, tweets, userList
+    posts, replies, media, users, tweets, userList, favorites
 
   Query* = object
     kind*: QueryKind
@@ -215,6 +229,7 @@ type
     imageDirectMessage = "image_direct_message"
     audiospace = "audiospace"
     newsletterPublication = "newsletter_publication"
+    hidden
     unknown
     
   Card* = object
@@ -276,6 +291,7 @@ type
     replies*: Result[Chain]
 
   Timeline* = Result[Tweet]
+  UsersTimeline* = Result[User]
 
   Profile* = object
     user*: User
@@ -321,6 +337,9 @@ type
     redisConns*: int
     redisMaxConns*: int
     redisPassword*: string
+
+    cookieHeader*: string
+    xCsrfToken*: string
 
   Rss* = object
     feed*, cursor*: string

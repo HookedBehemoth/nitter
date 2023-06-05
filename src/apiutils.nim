@@ -3,6 +3,7 @@ import httpclient, asyncdispatch, options, strutils, uri
 import jsony, packedjson, zippy
 import types, tokens, consts, parserutils, http_pool
 import experimental/types/common
+import config
 
 const
   rlRemaining = "x-rate-limit-remaining"
@@ -17,8 +18,8 @@ proc genParams*(pars: openArray[(string, string)] = @[]; cursor="";
     result &= p
   if ext:
     result &= ("ext", "mediaStats")
-    result &= ("include_ext_alt_text", "true")
-    result &= ("include_ext_media_availability", "true")
+    result &= ("include_ext_alt_text", "1")
+    result &= ("include_ext_media_availability", "1")
   if count.len > 0:
     result &= ("count", count)
   if cursor.len > 0:
@@ -44,13 +45,13 @@ proc genHeaders*(token: Token = nil): HttpHeaders =
   })
 
 template updateToken() =
-  if api != Api.search and resp.headers.hasKey(rlRemaining):
+  if resp.headers.hasKey(rlRemaining):
     let
       remaining = parseInt(resp.headers[rlRemaining])
       reset = parseInt(resp.headers[rlReset])
     token.setRateLimit(api, remaining, reset)
 
-template fetchImpl(result, fetchBody) {.dirty.} =
+template fetchImpl(result, additional_headers, fetchBody) {.dirty.} =
   once:
     pool = HttpPool()
 
@@ -60,21 +61,19 @@ template fetchImpl(result, fetchBody) {.dirty.} =
 
   try:
     var resp: AsyncResponse
-    pool.use(genHeaders(token)):
+    var headers = genHeaders(token)
+    for key, value in additional_headers.pairs():
+      headers.add(key, value)
+    pool.use(headers):
       template getContent =
         resp = await c.get($url)
         result = await resp.body
 
       getContent()
 
-      # Twitter randomly returns 401 errors with an empty body quite often.
-      # Retrying the request usually works.
-      if resp.status == "401 Unauthorized" and result.len == 0:
-        getContent()
-
-    if resp.status == $Http503:
-      badClient = true
-      raise newException(InternalError, result)
+      if resp.status == $Http503:
+        badClient = true
+        raise newException(BadClientError, "Bad client")
 
     if result.len > 0:
       if resp.headers.getOrDefault("content-encoding") == "gzip":
@@ -90,15 +89,24 @@ template fetchImpl(result, fetchBody) {.dirty.} =
       raise newException(InternalError, $url)
   except InternalError as e:
     raise e
+  except BadClientError as e:
+    release(token, used=true)
+    raise e
   except Exception as e:
     echo "error: ", e.name, ", msg: ", e.msg, ", token: ", token[], ", url: ", url
     if "length" notin e.msg and "descriptor" notin e.msg:
       release(token, invalid=true)
     raise rateLimitError()
 
-proc fetch*(url: Uri; api: Api): Future[JsonNode] {.async.} =
+proc fetch*(url: Uri; api: Api; additional_headers: HttpHeaders = newHttpHeaders()): Future[JsonNode] {.async.} =
+
+  if len(cfg.cookieHeader) != 0:
+      additional_headers.add("Cookie", cfg.cookieHeader)
+  if len(cfg.xCsrfToken) != 0:
+      additional_headers.add("x-csrf-token", cfg.xCsrfToken)
+
   var body: string
-  fetchImpl body:
+  fetchImpl(body, additional_headers):
     if body.startsWith('{') or body.startsWith('['):
       result = parseJson(body)
     else:
@@ -108,13 +116,13 @@ proc fetch*(url: Uri; api: Api): Future[JsonNode] {.async.} =
     updateToken()
 
     let error = result.getError
-    if error in {invalidToken, forbidden, badToken}:
+    if error in {invalidToken, badToken}:
       echo "fetch error: ", result.getError
       release(token, invalid=true)
       raise rateLimitError()
 
-proc fetchRaw*(url: Uri; api: Api): Future[string] {.async.} =
-  fetchImpl result:
+proc fetchRaw*(url: Uri; api: Api; additional_headers: HttpHeaders = newHttpHeaders()): Future[string] {.async.} =
+  fetchImpl(result, additional_headers):
     if not (result.startsWith('{') or result.startsWith('[')):
       echo resp.status, ": ", result, " --- url: ", url
       result.setLen(0)
@@ -123,7 +131,7 @@ proc fetchRaw*(url: Uri; api: Api): Future[string] {.async.} =
 
     if result.startsWith("{\"errors"):
       let errors = result.fromJson(Errors)
-      if errors in {invalidToken, forbidden, badToken}:
+      if errors in {invalidToken, badToken}:
         echo "fetch error: ", errors
         release(token, invalid=true)
         raise rateLimitError()

@@ -2,7 +2,6 @@
 import asyncdispatch, strformat, logging
 from net import Port
 from htmlgen import a
-from os import getEnv
 
 import jester
 
@@ -14,9 +13,6 @@ import routes/[
 
 const instancesUrl = "https://github.com/zedeus/nitter/wiki/Instances"
 const issuesUrl = "https://github.com/zedeus/nitter/issues"
-
-let configPath = getEnv("NITTER_CONF_FILE", "./nitter.conf")
-let (cfg, fullCfg) = getConfig(configPath)
 
 if not cfg.enableDebug:
   # Silence Jester's query warning
@@ -86,20 +82,24 @@ routes:
     resp Http500, showError(
       &"An error occurred, please {link} with the URL you tried to visit.", cfg)
 
+  error BadClientError:
+    echo error.exc.name, ": ", error.exc.msg
+    resp Http500, showError("Network error occured, please try again.", cfg)
+
   error RateLimitError:
     const link = a("another instance", href = instancesUrl)
     resp Http429, showError(
       &"Instance has been rate limited.<br>Use {link} or try again later.", cfg)
 
-  extend unsupported, ""
-  extend preferences, ""
-  extend resolver, ""
   extend rss, ""
+  extend status, ""
   extend search, ""
   extend timeline, ""
-  extend list, ""
-  extend status, ""
   extend media, ""
+  extend list, ""
+  extend preferences, ""
+  extend resolver, ""
   extend embed, ""
   extend notes, ""
   extend debug, ""
+  extend unsupported, ""

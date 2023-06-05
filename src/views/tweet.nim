@@ -101,12 +101,10 @@ proc renderVideo*(video: Video; prefs: Prefs; path: string): VNode =
                      else: vidUrl
           case playbackType
           of mp4:
-            if prefs.muteVideos:
-              video(src=source, poster=thumb, controls="", muted="", preload="metadata"):
-            else:
-              video(src=source, poster=thumb, controls="", preload="metadata"):
+            video(poster=thumb, controls="", muted=prefs.muteVideos):
+              source(src=source, `type`="video/mp4")
           of m3u8, vmap:
-            video(poster=thumb, data-url=source, data-autoload="false")
+            video(poster=thumb, data-url=source, data-autoload="false", muted=prefs.muteVideos)
             verbatim "<div class=\"video-overlay\" onclick=\"playVideo(this)\">"
             tdiv(class="overlay-circle"): span(class="overlay-triangle")
             verbatim "</div>"
@@ -127,14 +125,9 @@ proc renderGif(gif: Gif; prefs: Prefs): VNode =
   buildHtml(tdiv(class="attachments media-gif")):
     tdiv(class="gallery-gif", style={maxHeight: "unset"}):
       tdiv(class="attachment"):
-        let thumb = getSmallPic(gif.thumb)
-        let url = getPicUrl(gif.url)
-        if prefs.autoplayGifs:
-          video(class="gif", poster=thumb, controls="", autoplay="", muted="", loop=""):
-            source(src=url, `type`="video/mp4")
-        else:
-          video(class="gif", poster=thumb, controls="", muted="", loop=""):
-            source(src=url, `type`="video/mp4")
+        video(class="gif", poster=getSmallPic(gif.thumb), autoplay=prefs.autoplayGifs,
+              controls="", muted="", loop=""):
+          source(src=getPicUrl(gif.url), `type`="video/mp4")
 
 proc renderPoll(poll: Poll): VNode =
   buildHtml(tdiv(class="poll")):
@@ -190,14 +183,19 @@ func formatStat(stat: int): string =
   if stat > 0: insertSep($stat, ',')
   else: ""
 
-proc renderStats(stats: TweetStats; views: string): VNode =
+proc renderStats(stats: TweetStats; views: string; tweet: Tweet): VNode =
   buildHtml(tdiv(class="tweet-stats")):
-    span(class="tweet-stat"): icon "comment", formatStat(stats.replies)
-    span(class="tweet-stat"): icon "retweet", formatStat(stats.retweets)
-    span(class="tweet-stat"): icon "quote", formatStat(stats.quotes)
-    span(class="tweet-stat"): icon "heart", formatStat(stats.likes)
-    if views.len > 0:
-      span(class="tweet-stat"): icon "play", insertSep(views, ',')
+    a(href=getLink(tweet)):
+      span(class="tweet-stat"): icon "comment", formatStat(stats.replies)
+    a(href=getLink(tweet, false) & "/retweeters"):
+      span(class="tweet-stat"): icon "retweet", formatStat(stats.retweets)
+    a(href=getLink(tweet)):
+      span(class="tweet-stat"): icon "quote", formatStat(stats.quotes)
+    a(href=getLink(tweet, false) & "/favoriters"):
+      span(class="tweet-stat"): icon "heart", formatStat(stats.likes)
+    a(href=getLink(tweet)):
+      if views.len > 0:
+        span(class="tweet-stat"): icon "play", insertSep(views, ',')
 
 proc renderReply(tweet: Tweet): VNode =
   buildHtml(tdiv(class="replying-to")):
@@ -328,7 +326,7 @@ proc renderTweet*(tweet: Tweet; prefs: Prefs; path: string; class=""; index=0;
       if tweet.attribution.isSome:
         renderAttribution(tweet.attribution.get(), prefs)
 
-      if tweet.card.isSome:
+      if tweet.card.isSome and tweet.card.get().kind != hidden:
         renderCard(tweet.card.get(), prefs, path)
 
       if tweet.photos.len > 0:
@@ -353,7 +351,7 @@ proc renderTweet*(tweet: Tweet; prefs: Prefs; path: string; class=""; index=0;
         renderMediaTags(tweet.mediaTags)
 
       if not prefs.hideTweetStats:
-        renderStats(tweet.stats, views)
+        renderStats(tweet.stats, views, tweet)
 
       if showThread:
         a(class="show-thread", href=("/i/status/" & $tweet.threadId)):
