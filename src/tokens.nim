@@ -44,8 +44,8 @@ proc getPoolJson*(): JsonNode =
           of Api.timeline: 187
           of Api.listMembers, Api.listBySlug, Api.list, Api.listTweets,
              Api.userTweets, Api.userTweetsAndReplies, Api.userMedia,
-             Api.userRestId, Api.userScreenName, Api.favorites,
-             Api.tweetDetail, Api.tweetResult, Api.search, Api.retweeters, Api.favoriters: 500
+             Api.userRestId, Api.userScreenName,
+             Api.tweetDetail, Api.tweetResult, Api.search, Api.favorites, Api.retweeters, Api.favoriters: 500
           of Api.userSearch: 900
         reqs = maxReqs - token.apis[api].remaining
 
