@@ -230,8 +230,11 @@ proc parseTweet(js: JsonNode; jsCard: JsonNode = newJNull()): Tweet =
   # graphql
   with rt, js{"retweeted_status_result", "result"}:
     # needed due to weird edgecase where the actual tweet data isn't included
-    if "legacy" in rt:
-      result.retweet = some parseGraphTweet(rt)
+    var rt_tweet = rt
+    if "tweet" in rt:
+      rt_tweet = rt{"tweet"}
+    if "legacy" in rt_tweet:
+      result.retweet = some parseGraphTweet(rt_tweet)
       return
 
   if jsCard.kind != JNull:
@@ -565,10 +568,10 @@ proc parseGraphTimeline*(js: JsonNode; root: string; after=""): Timeline =
         elif entryId.startsWith("cursor-bottom"):
           result.bottom = e{"content", "value"}.getStr
 
-proc parseGraphUsersTimeline(js: JsonNode; root: string; key: string; after=""): UsersTimeline =
+proc parseGraphUsersTimeline(timeline: JsonNode; after=""): UsersTimeline =
   result = UsersTimeline(beginning: after.len == 0)
 
-  let instructions = ? js{"data", key, "timeline", "instructions"}
+  let instructions = ? timeline{"instructions"}
 
   if instructions.len == 0:
     return
@@ -587,10 +590,13 @@ proc parseGraphUsersTimeline(js: JsonNode; root: string; key: string; after=""):
           result.top = e{"content", "value"}.getStr
 
 proc parseGraphFavoritersTimeline*(js: JsonNode; root: string; after=""): UsersTimeline =
-  return parseGraphUsersTimeline(js, root, "favoriters_timeline", after)
+  return parseGraphUsersTimeline(js{"data", "favoriters_timeline", "timeline"}, after)
 
 proc parseGraphRetweetersTimeline*(js: JsonNode; root: string; after=""): UsersTimeline =
-  return parseGraphUsersTimeline(js, root, "retweeters_timeline", after)
+  return parseGraphUsersTimeline(js{"data", "retweeters_timeline", "timeline"}, after)
+
+proc parseGraphFollowTimeline*(js: JsonNode; root: string; after=""): UsersTimeline =
+  return parseGraphUsersTimeline(js{"data", "user", "result", "timeline", "timeline"}, after)
 
 proc parseGraphSearch*(js: JsonNode; after=""): Timeline =
   result = Timeline(beginning: after.len == 0)
